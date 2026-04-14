@@ -2,6 +2,8 @@
 
 Fetches datasets from CES open-data endpoints and writes them to a filesystem tree according to a JSON schedule config.
 
+This repository can be run standalone; it does not require the parent `datasets` repo as long as the required environment variables, credentials, and Python dependencies are present.
+
 ## What it does
 
 `ces-export` talks to the CES OD_001 / OD_002 / OD_003 endpoints, chooses an organization, plans dataset/date windows from `config/datasets.json`, downloads the payloads, and then optionally merges or postprocesses them.
@@ -28,11 +30,34 @@ It supports:
 - `ces_export/mergers.py` — CSV and RDF/XML merge logic
 - `ces_export/postprocess.py` — extra output conversions
 
+## Install / setup
+
+Set up a virtual environment and install the required Python packages before running:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Then:
+
+- prepare `CES_SECRETS_DIR`
+- set `CES_ORG_NAME`
+- run `./run.sh --out-dir /path/to/output`
+
 ## Runtime requirements
 
-This module is the only part of the repo that requires non-public credentials.
+This repository is intended to be run via `run.sh`, which wraps the Python package with `systemd-run` and `LoadCredential=`.
 
-Required when CES is enabled:
+It therefore requires:
+
+- `systemd-run`
+- a systemd version that supports `LoadCredential=`
+- permission to run the `sudo` commands used by `run.sh`
+- read access to the credential files referenced by `CES_SECRETS_DIR`
+
+This module also requires non-public credentials:
 
 - `CES_ORG_NAME`
 - `CES_SECRETS_DIR`
@@ -167,7 +192,7 @@ Merge strategies implemented by the runner:
      - `payload: "..."`, where `payload` is the Base64-encoded JSON object listed above
    - the OD_001 request creates an asynchronous export request and returns an integer `requestId`
    - poll `OD_002/<requestId>` until the export is ready
-     - while the job is still being processed, OD_002 returns `status: "processing"`
+     - while the export is still being prepared, OD_002 may return `status: "new"` and later `status: "processing"`
      - when the export is ready, OD_002 returns `status: "done"`
      - in the `done` response, the exported dataset is returned in the same `OD_002` response under `payload`
      - `payload` is a Base64-encoded string containing the raw output file bytes (for example CSV or XML, depending on the requested format)
