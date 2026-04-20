@@ -3,6 +3,11 @@ from __future__ import annotations
 import argparse
 import os
 import requests
+import logging
+from .logging_utils import (
+    configure_rdflib_warning_suppression,
+    rdflib_warning_handler,
+)
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -14,6 +19,7 @@ from .planner import build_jobs
 from .runner import postprocess_result, run_job
 from .settings import build_session, common_headers, load_app_settings, load_credentials
 
+configure_rdflib_warning_suppression()
 
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
@@ -87,6 +93,7 @@ def main() -> int:
     soft_failures: list[str] = []
 
     for job in jobs:
+        rdflib_warning_handler.begin_scope(f"{job.dataset} [{job.fmt}]")
         try:
             result = run_job(
                 session,
@@ -123,6 +130,9 @@ def main() -> int:
             print(msg)
             print("error:", repr(e))
             soft_failures.append(f"{msg} | {repr(e)}")
+
+        finally:
+            rdflib_warning_handler.end_scope()
 
     if soft_failures:
         print("\nCompleted with non-fatal dataset failures:")
